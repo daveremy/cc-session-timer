@@ -1,6 +1,20 @@
 # cc-session-timer
 
-A lightweight bash script that displays the remaining time in your current Claude Code 5-hour session. Perfect for tmux status bars, command-line usage, or scripts.
+**Experimental script** that shows the remaining time in your current Claude Code 5-hour session. Perfect for tmux status bars or quick command-line checks.
+
+![Screenshot showing ⏲️ 2h30m in tmux status bar]
+
+## ⚠️ Important Disclaimer
+
+This is an **unofficial tool** that reads from local JSONL log files to calculate session times. Since Anthropic doesn't provide an official API for session information, this script:
+
+- May not perfectly match Claude's internal session tracking
+- Could break if Claude Code changes its logging format
+- Shows calculated time based on activity timestamps
+
+## 🙏 Inspiration & Credit
+
+This tool was inspired by the excellent [ccusage](https://github.com/zckly/ccusage) project, which provides comprehensive Claude Code usage analytics. We studied ccusage's session calculation logic to ensure our timer matches their implementation. If you need detailed usage analytics, token counts, and cost tracking, check out ccusage!
 
 ## How It Works
 
@@ -9,7 +23,7 @@ Claude Code uses 5-hour rolling sessions that:
 - End exactly 5 hours later (e.g., 11:00 AM → 4:00 PM)
 - A new session starts if >5 hours have passed since the session start OR >5 hours since the last activity
 
-This tool reads the timestamp data from `~/.claude/projects/*/` JSONL files to calculate when your current session will end.
+This tool reads timestamp data from `~/.claude/projects/*/` JSONL files to calculate when your current session will end.
 
 ## Installation
 
@@ -69,14 +83,14 @@ The script uses different emoji indicators based on time remaining:
 - ⏱️ Less than 1 hour remaining
 - ⏰ Less than 15 minutes remaining (warning!)
 
-## How It Compares to ccusage
+## Why Use This?
 
-This tool complements [ccusage](https://github.com/zckly/ccusage) by providing a lightweight, focused view of your current session time. While ccusage gives you comprehensive token usage analytics with `npx ccusage@latest blocks --live`, cc-session-timer is designed for:
+While [ccusage](https://github.com/zckly/ccusage) provides comprehensive analytics with `npx ccusage@latest blocks --live`, this tool is designed for:
 
-- Quick command-line checks
-- tmux status bar integration
-- Scripting and automation
-- Minimal dependencies (just bash)
+- **Lightweight monitoring** - Just bash, no Node.js required
+- **tmux integration** - Always visible in your status bar
+- **Quick checks** - Instant session time without analytics overhead
+- **Scripting** - Simple output formats for automation
 
 ## Requirements
 
@@ -92,7 +106,13 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 Created by [Dave Remy](https://github.com/daveremy)
 
+## Limitations
+
+- Only shows current session when in a Claude project directory
+- Requires Claude Code activity to have generated JSONL files
+- Session calculation is best-effort based on observed patterns
+
 ## See Also
 
 - [cc-model-detector](https://github.com/daveremy/cc-model-detector) - Detect which Claude model is being used
-- [ccusage](https://github.com/zckly/ccusage) - Comprehensive Claude Code usage analytics
+- [ccusage](https://github.com/zckly/ccusage) - Comprehensive Claude Code usage analytics (our inspiration!)
