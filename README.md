@@ -2,7 +2,7 @@
 
 **Experimental script** that shows the remaining time in your current Claude Code 5-hour session. Perfect for tmux status bars or quick command-line checks.
 
-![Screenshot showing ⏲️ 2h30m in tmux status bar]
+![Demo showing session timer in tmux status bar](images/demo.png)
 
 ## ⚠️ Important Disclaimer
 
