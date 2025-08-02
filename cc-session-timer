@@ -15,12 +15,37 @@
 # Constants
 SESSION_DURATION=18000  # 5 hours in seconds
 
+# Function to check if we're in a Claude project
+is_claude_project() {
+    local current_dir=$(pwd)
+    local project_name=$(echo "$current_dir" | sed "s|$HOME/||" | sed 's|[/.]|-|g')
+    local project_dir="$HOME/.claude/projects/-Users-${USER}-${project_name}"
+    
+    if [ -d "$project_dir" ]; then
+        return 0
+    fi
+    
+    # Try without -Users prefix
+    project_dir="$HOME/.claude/projects/${project_name}"
+    if [ -d "$project_dir" ]; then
+        return 0
+    fi
+    
+    return 1
+}
+
 # Get current time
 NOW=$(date +%s)
 TODAY=$(date -u +%Y-%m-%d)
 
 # Debug mode
 DEBUG=${DEBUG:-0}
+
+# For tmux status bar, only show if in Claude project
+# (verbose, raw, and debug modes always run)
+if [ "$1" = "" ] && ! is_claude_project; then
+    exit 0
+fi
 
 debug() {
     if [ "$DEBUG" = "1" ]; then
@@ -124,11 +149,11 @@ if [ "$FOUND_CURRENT_SESSION" = "true" ]; then
             HOURS=$((REMAINING / 3600))
             MINS=$(((REMAINING % 3600) / 60))
             if [ $REMAINING -le 900 ]; then  # < 15 min
-                printf "⏰ %dh%02dm" "$HOURS" "$MINS"
+                printf "⏰  %dh%02dm" "$HOURS" "$MINS"
             elif [ $HOURS -eq 0 ]; then
-                printf "⏱️ %dm" "$MINS"
+                printf "⏱️  %dm" "$MINS"
             else
-                printf "⏲️ %dh%02dm" "$HOURS" "$MINS"
+                printf "⏲️  %dh%02dm" "$HOURS" "$MINS"
             fi
             ;;
     esac
