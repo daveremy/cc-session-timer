@@ -1,0 +1,137 @@
+#!/bin/bash
+# cc-session-timer - Show remaining time in current Claude Code session
+# 
+# Claude Code uses 5-hour rolling sessions that:
+# - Start at the floored hour of first activity
+# - End 5 hours later
+# - New session starts if >5h since session start OR >5h since last activity
+#
+# Usage:
+#   cc-session-timer          # tmux status bar format (⏲️ 2h30m)
+#   cc-session-timer verbose  # Human readable (Session ends at 4:00 PM (2h30m left))
+#   cc-session-timer raw      # Seconds remaining (9000)
+#   cc-session-timer debug    # Verbose output with debug info
+
+# Constants
+SESSION_DURATION=18000  # 5 hours in seconds
+
+# Get current time
+NOW=$(date +%s)
+TODAY=$(date -u +%Y-%m-%d)
+
+# Debug mode
+DEBUG=${DEBUG:-0}
+
+debug() {
+    if [ "$DEBUG" = "1" ]; then
+        echo "DEBUG: $1" >&2
+    fi
+}
+
+# Floor timestamp to hour
+floor_to_hour() {
+    local ts=$1
+    echo $(( ts - (ts % 3600) ))
+}
+
+# Get all timestamps from JSONL files sorted by time
+ALL_TIMESTAMPS=$(find ~/.claude/projects -name "*.jsonl" -type f -exec cat {} \; 2>/dev/null | \
+                 grep -o "\"timestamp\":\"${TODAY}T[^\"]*\"" | \
+                 cut -d'"' -f4 | \
+                 sort)
+
+if [ -z "$ALL_TIMESTAMPS" ]; then
+    debug "No timestamps found for today"
+    exit 0
+fi
+
+debug "Found $(echo "$ALL_TIMESTAMPS" | wc -l) timestamps today"
+
+# Process timestamps to identify session blocks
+CURRENT_BLOCK_START=""
+CURRENT_BLOCK_END=""
+LAST_ENTRY_TIME=""
+FOUND_CURRENT_SESSION=false
+
+while IFS= read -r ts; do
+    if [ -n "$ts" ]; then
+        # Parse timestamp to epoch
+        CLEAN="${ts%Z}"
+        CLEAN="${CLEAN%%.*}"
+        
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            TS_EPOCH=$(date -u -j -f "%Y-%m-%dT%H:%M:%S" "$CLEAN" "+%s" 2>/dev/null)
+        else
+            TS_EPOCH=$(date -d "$ts" "+%s" 2>/dev/null)
+        fi
+        
+        if [ -n "$TS_EPOCH" ]; then
+            if [ -z "$CURRENT_BLOCK_START" ]; then
+                # First entry - start new block floored to hour
+                CURRENT_BLOCK_START=$(floor_to_hour $TS_EPOCH)
+                CURRENT_BLOCK_END=$((CURRENT_BLOCK_START + SESSION_DURATION))
+                LAST_ENTRY_TIME=$TS_EPOCH
+            else
+                TIME_SINCE_BLOCK_START=$((TS_EPOCH - CURRENT_BLOCK_START))
+                TIME_SINCE_LAST_ENTRY=$((TS_EPOCH - LAST_ENTRY_TIME))
+                
+                # Check if we need a new block (matches ccusage logic)
+                if [ $TIME_SINCE_BLOCK_START -gt $SESSION_DURATION ] || [ $TIME_SINCE_LAST_ENTRY -gt $SESSION_DURATION ]; then
+                    # Start new block floored to hour
+                    CURRENT_BLOCK_START=$(floor_to_hour $TS_EPOCH)
+                    CURRENT_BLOCK_END=$((CURRENT_BLOCK_START + SESSION_DURATION))
+                fi
+                
+                LAST_ENTRY_TIME=$TS_EPOCH
+            fi
+            
+            # Check if current time is in this block
+            if [ $NOW -ge $CURRENT_BLOCK_START ] && [ $NOW -lt $CURRENT_BLOCK_END ]; then
+                FOUND_CURRENT_SESSION=true
+            fi
+        fi
+    fi
+done <<< "$ALL_TIMESTAMPS"
+
+# Output result
+if [ "$FOUND_CURRENT_SESSION" = "true" ]; then
+    REMAINING=$((CURRENT_BLOCK_END - NOW))
+    
+    case "$1" in
+        verbose)
+            # Convert UTC times to local for display
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                END_TIME=$(date -r "$CURRENT_BLOCK_END" "+%-I:%M %p")
+                START_TIME=$(date -r "$CURRENT_BLOCK_START" "+%-I:%M %p")
+            else
+                END_TIME=$(date -d "@$CURRENT_BLOCK_END" "+%-I:%M %p")
+                START_TIME=$(date -d "@$CURRENT_BLOCK_START" "+%-I:%M %p")
+            fi
+            HOURS=$((REMAINING / 3600))
+            MINS=$(((REMAINING % 3600) / 60))
+            echo "Session: $START_TIME - $END_TIME"
+            printf "Session ends at %s (%dh%02dm left)\n" "$END_TIME" "$HOURS" "$MINS"
+            ;;
+        raw)
+            echo "$REMAINING"
+            ;;
+        debug)
+            DEBUG=1
+            exec "$0" verbose
+            ;;
+        *)
+            # tmux format (default)
+            HOURS=$((REMAINING / 3600))
+            MINS=$(((REMAINING % 3600) / 60))
+            if [ $REMAINING -le 900 ]; then  # < 15 min
+                printf "⏰ %dh%02dm" "$HOURS" "$MINS"
+            elif [ $HOURS -eq 0 ]; then
+                printf "⏱️ %dm" "$MINS"
+            else
+                printf "⏲️ %dh%02dm" "$HOURS" "$MINS"
+            fi
+            ;;
+    esac
+else
+    debug "No active session found"
+fi
